@@ -1,4 +1,4 @@
-# Sexism Detection in English Texts
+# Sexism Detection in English Texts with Naïve Bayes and Linguistic Feature Analysis
 
 This project aims to build a **text classification model** that predicts whether an English text is **sexist** or **non-sexist**.
 
