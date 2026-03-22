@@ -8,7 +8,7 @@ from nltk.stem import PorterStemmer
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 
-from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
 
 """
@@ -18,20 +18,20 @@ from sklearn.naive_bayes import MultinomialNB
         - remove stopwords
         - stemming
 
-    We will then transform those into numerical vectors using words counts.
-    Then we will train a Multinomial Naïve Bayes classifier on these counts.
+    We will then transform those with Tfidf vectorize .
+    Then we will train a Multinomial Naïve Bayes classifier on our processed data.
     The training is done on the file named "train.csv" in the dataset directory.
     Tested on "test.csv" file.
 
-    The pipeline automates the vectorization and classification steps.
+    The pipeline automates vectorization and classification steps.
 """
 
-# Unquote if not installed locally, only once 
+# Unquote if not installed locally, only once
 # nltk.download("stopwords")
 
-# Pipeline
-model_preprocess_count =  Pipeline([
-    ("vectorizer", CountVectorizer()),
+# Pipeline 
+model_processed_tfidf = Pipeline([
+    ("vectorizer", TfidfVectorizer()),
     ("classifier", MultinomialNB())
 ])
 
@@ -91,6 +91,7 @@ def preprocess_texts(texts):
 train_processed_text = preprocess_texts(train_raw_text)
 test_processed_text = preprocess_texts(test_raw_text)
 
+
 # Evaluate the model extrinsicly
 def evaluate_model(name, model, X_train, X_test, y_train, y_test):
     model.fit(X_train, y_train)
@@ -107,8 +108,8 @@ def evaluate_model(name, model, X_train, X_test, y_train, y_test):
 
     return model
 
-model_preprocess_count = evaluate_model(
-    "Cleaned text + CountVectorizer + MultinomialNB",
-    model_preprocess_count,
+model_processed_tfidf = evaluate_model(
+    "Cleaned text + TfidfVectorizer + MultinomialNB",
+    model_processed_tfidf,
     train_processed_text, test_processed_text, train_label, test_label
 )
