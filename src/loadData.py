@@ -3,6 +3,7 @@ import numpy as np
 from sklearn.feature_extraction.text import CountVectorizer
 
 """
+The csv fields are as follow :
     rewire_id: Unique identifier for each entry.
     text: The English text for analysis.
     label_sexist: Classification indicating whether the text is sexist (not sexist, 75.7%).
@@ -14,14 +15,22 @@ train_data_path = "./dataset/train.csv"
 
 sexism_data = pd.read_csv(train_data_path)
 
+nb_sexist = sexism_data[sexism_data["label_sexist"] == "sexist" ]
+
+
 text_cat = ["text", "label_sexist"]
 raw_text = sexism_data["text"]
 
-text_cat_data = sexism_data[text_cat]
 
+text_cat_data = sexism_data[text_cat]
+print("Sample of the data:")
 print(text_cat_data.head())
 
-# Highlight frequents word in sexist section
+print("\nPartition of sexist texts:")
+partition_of_sexism = str(len(nb_sexist)) + " of sexist texts over " + str(len(sexism_data)) + " texts"
+print("\n"+partition_of_sexism+ "\n")
+
+# Highlight frequents word in sexist section (without stopword)
 sexist_texts = sexism_data[sexism_data["label_sexist"] == "sexist"]["text"]
 
 vectorizer = CountVectorizer(stop_words="english")

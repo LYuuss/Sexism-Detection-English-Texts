@@ -12,7 +12,6 @@ from sklearn.naive_bayes import MultinomialNB
         - lowercase the texts
         - remove punctuation
         - remove stopwords
-        - stemming
 
     We will then transform those into numerical vectors using words counts focusing on bigram.
     Then we will train a Multinomial Naïve Bayes classifier on these counts.
