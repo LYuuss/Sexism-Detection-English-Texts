@@ -1,4 +1,6 @@
 import pandas as pd 
+import numpy as np
+from sklearn.feature_extraction.text import CountVectorizer
 
 """
     rewire_id: Unique identifier for each entry.
@@ -19,10 +21,17 @@ text_cat_data = sexism_data[text_cat]
 
 print(text_cat_data.head())
 
-# map sexist -> 1 and non_sexist -> 0
-label = text_cat_data["label_sexist"].map({
-    "not sexist": 0,
-    "sexist": 1
-})
+# Highlight frequents word in sexist section
+sexist_texts = sexism_data[sexism_data["label_sexist"] == "sexist"]["text"]
 
+vectorizer = CountVectorizer(stop_words="english")
+X = vectorizer.fit_transform(sexist_texts)
 
+word_counts = np.asarray(X.sum(axis=0)).ravel()
+feature_names = vectorizer.get_feature_names_out()
+
+top_indices = word_counts.argsort()[::-1][:30]
+
+print("Top 30 most frequent words in sexist texts:")
+for idx in top_indices:
+    print(feature_names[idx], word_counts[idx])
