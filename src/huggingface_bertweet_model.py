@@ -15,7 +15,7 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
         - not sexist
         - sexist
 
-    We evaluate it on train.csv and print the results in the same
+    We evaluate it on test.csv and print the results in the same
     format as the previous models.
 """
 
