@@ -12,3 +12,7 @@ if __name__ == "__main__":
     print("\nMapped data:")
     mapped_data = map_data(data)
     print(mapped_data.head())
+    
+    print("\nPreprocessed texts:")
+    preprocessed_texts = preprocess_texts(get_raw_text(data))
+    print(preprocessed_texts[:25])
