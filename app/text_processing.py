@@ -1,22 +1,17 @@
 import pandas as pd
 
 import nltk
-from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 
 import string
+
+from .stopwords import set_stopwords, download_nltk_stopwords, get_custom_stopwords
 
 def map_data(data):
     return data["label_sexist"].map({
         "not sexist": 0,
         "sexist": 1
     })
-    
-def download_nltk_stopwords():
-    nltk.download("stopwords")
-    
-def set_stopwords(language):
-    return set(stopwords.words(language))
 
 # Processing the inputs
 def preprocess_texts(texts, language="english"):
@@ -28,9 +23,11 @@ def preprocess_texts(texts, language="english"):
     - apply stemming
     - return cleaned texts as a list of strings
     """
-    
-    download_nltk_stopwords()
-    stop_words = set_stopwords(language)
+    if language != "custom":
+        download_nltk_stopwords()
+        stop_words = set_stopwords(language)
+    else:
+        stop_words = get_custom_stopwords()
 
     punctuation = set(string.punctuation)
     stemmer = PorterStemmer()
@@ -49,7 +46,10 @@ def preprocess_texts(texts, language="english"):
 
         tokens = [word for word in tokens if word not in stop_words]
 
-        tokens = [stemmer.stem(word) for word in tokens]
+        if language != "custom":
+            tokens = [stemmer.stem(word) for word in tokens]
+        else:
+            tokens = [word for word in tokens if word not in get_custom_stopwords()]
 
         processed_texts.append(" ".join(tokens))
 
