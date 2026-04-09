@@ -1,28 +1,63 @@
 from app.loadData import *
-from app.text_processing import *
-from app.stopwords import *
+from app.models.evaluate_model import evaluate
+from app.models.huggingface_bertweet import load_model
+from app.models.naive_bayes import build_pipeline
+from app.text_processing import map_data, missing_values_handling, preprocess_texts
+
+
+def example_evaluate_naive_bayes():
+    train_data = load_file("train")
+    test_data = load_file("test")
+
+    train_texts = preprocess_texts(get_raw_text(train_data))
+    test_texts = preprocess_texts(get_raw_text(test_data))
+    y_train = map_data(train_data)
+    y_test = map_data(test_data)
+
+    naive_bayes_pipeline = build_pipeline(
+        vectorizer_type="count",
+        ngram_range=(1, 2),
+        min_df=3
+    )
+
+    trained_pipeline, y_pred = evaluate(
+        name="Naive Bayes example",
+        model=naive_bayes_pipeline,
+        X_train=train_texts,
+        X_test=test_texts,
+        y_train=y_train,
+        y_test=y_test
+    )
+
+    return trained_pipeline, y_pred
+
+
+def example_evaluate_bertweet():
+    test_data = load_file("test")
+
+    texts = missing_values_handling(test_data)
+    y_true = map_data(test_data)
+
+    tokenizer, bertweet_model, device = load_model(debug=True)
+
+    loaded_model, y_pred = evaluate(
+        name="BERTweet example",
+        texts=texts,
+        y_true=y_true,
+        tokenizer=tokenizer,
+        bertweet_model=bertweet_model,
+        device=device,
+        batch_size=16,
+        max_length=128,
+        debug=True
+    )
+
+    return loaded_model, y_pred
+
 
 if __name__ == "__main__":
-    data = load_file("train")
-    print(get_raw_text(data).head())
-    print(get_sexist_rows(data).head())
-    
-    print("\nPartition of sexist texts:")
-    print_partition_of_sexism(data)
-    
-    print("\nMapped data:")
-    mapped_data = map_data(data)
-    print(mapped_data.head())
-    
-    add_custom_stopwords(["test1", "test2"])
-    print(get_custom_stopwords())
-    delete_custom_stopwords(["test1"])
-    print(get_custom_stopwords())
-    
-    print("\nPreprocessed texts:")
-    preprocessed_texts = preprocess_texts(get_raw_text(data))
-    print(preprocessed_texts[:25])
-    
-    print("\nFinal preprocessed texts with custom stopwords:")
-    final_preprocessed_texts = preprocess_texts(get_raw_text(data), "custom")
-    print(final_preprocessed_texts[:25])
+    print("Naive Bayes evaluation example:")
+    example_evaluate_naive_bayes()
+
+    print("\nBERTweet evaluation example:")
+    example_evaluate_bertweet()
