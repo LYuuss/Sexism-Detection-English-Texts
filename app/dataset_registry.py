@@ -1,5 +1,6 @@
 import csv
 import json
+import os
 import shutil
 from pathlib import Path
 from uuid import uuid4
@@ -13,18 +14,15 @@ DEFAULT_DATASETS = {
     "test": "dataset/test.csv",
     "dev": "dataset/dev.csv",
 }
+DEFAULT_OPTIONS = {
+    "delete_duplicated_datasets_on_exit": True,
+    "debug": False,
+}
 REQUIRED_COLUMNS = {"text", "label_sexist"}
 
 
 def load_dataset_config() -> dict[str, str]:
-    if not CONFIG_PATH.exists():
-        return dict(DEFAULT_DATASETS)
-
-    try:
-        data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return dict(DEFAULT_DATASETS)
-
+    data = _load_config_payload()
     datasets = data.get("datasets", {})
     merged = dict(DEFAULT_DATASETS)
     for split in DEFAULT_DATASETS:
@@ -35,8 +33,51 @@ def load_dataset_config() -> dict[str, str]:
     return merged
 
 
+def load_app_options() -> dict[str, bool]:
+    data = _load_config_payload()
+    saved_options = data.get("options", {})
+    merged = dict(DEFAULT_OPTIONS)
+    for key in DEFAULT_OPTIONS:
+        value = saved_options.get(key)
+        if isinstance(value, bool):
+            merged[key] = value
+
+    return merged
+
+
+def load_selected_methods() -> list[str]:
+    data = _load_config_payload()
+    selected_methods = data.get("selected_methods", [])
+    if not isinstance(selected_methods, list):
+        return []
+
+    return [item for item in selected_methods if isinstance(item, str) and item.strip()]
+
+
 def save_dataset_config(config: dict[str, str]) -> None:
-    payload = {"datasets": config}
+    payload = {
+        "datasets": dict(DEFAULT_DATASETS) | config,
+        "options": load_app_options(),
+        "selected_methods": load_selected_methods(),
+    }
+    CONFIG_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def save_app_options(options: dict[str, bool]) -> None:
+    payload = {
+        "datasets": load_dataset_config(),
+        "options": dict(DEFAULT_OPTIONS) | options,
+        "selected_methods": load_selected_methods(),
+    }
+    CONFIG_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def save_selected_methods(selected_methods: list[str]) -> None:
+    payload = {
+        "datasets": load_dataset_config(),
+        "options": load_app_options(),
+        "selected_methods": selected_methods,
+    }
     CONFIG_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
 
 
@@ -85,7 +126,7 @@ def validate_dataset_file(path: str | Path) -> Path:
     return resolved
 
 
-def assign_dataset(split: str, path: str) -> Path:
+def assign_dataset(split: str, path: str | Path) -> Path:
     if split not in DEFAULT_DATASETS:
         raise ValueError(f"Unknown split: {split}")
 
@@ -121,7 +162,11 @@ def dataset_summary(path: str | Path) -> dict[str, int | str]:
 
 
 def duplicate_active_dataset(split: str, new_file_name: str) -> Path:
-    source = get_dataset_path(split)
+    return duplicate_dataset_file(get_dataset_path(split), new_file_name)
+
+
+def duplicate_dataset_file(source_path: str | Path, new_file_name: str) -> Path:
+    source = validate_dataset_file(source_path)
 
     file_name = new_file_name.strip()
     if not file_name:
@@ -136,19 +181,25 @@ def duplicate_active_dataset(split: str, new_file_name: str) -> Path:
 
     target.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, target)
-    return target
+    return target.resolve()
 
 
 def append_dataset_row(split: str, text: str, label: str) -> Path:
-    if split not in DEFAULT_DATASETS:
-        raise ValueError(f"Unknown split: {split}")
+    dataset_path = get_dataset_path(split)
+    return append_dataset_row_to_path(dataset_path, text, label, split=split)
 
+
+def append_dataset_row_to_path(
+    path: str | Path,
+    text: str,
+    label: str,
+    split: str | None = None,
+) -> Path:
     clean_label = label.strip().lower()
     if clean_label not in {"sexist", "not sexist"}:
         raise ValueError("Label must be 'sexist' or 'not sexist'.")
 
-    dataset_path = get_dataset_path(split)
-    validate_dataset_file(dataset_path)
+    dataset_path = validate_dataset_file(path)
 
     with dataset_path.open("r", encoding="utf-8", newline="") as handle:
         reader = csv.DictReader(handle)
@@ -165,7 +216,7 @@ def append_dataset_row(split: str, text: str, label: str) -> Path:
         row["label_category"] = "custom" if clean_label == "sexist" else "none"
     if "label_vector" in row:
         row["label_vector"] = "custom" if clean_label == "sexist" else "none"
-    if "split" in row:
+    if "split" in row and split is not None:
         row["split"] = split
 
     with dataset_path.open("a", encoding="utf-8", newline="") as handle:
@@ -173,6 +224,29 @@ def append_dataset_row(split: str, text: str, label: str) -> Path:
         writer.writerow(row)
 
     return dataset_path
+
+
+def remove_dataset_file(path: str | Path) -> None:
+    resolved = _resolve_path(path)
+    if resolved.exists():
+        os.remove(resolved)
+
+
+def _load_config_payload() -> dict:
+    if not CONFIG_PATH.exists():
+        return {}
+
+    try:
+        return json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+
+
+def _resolve_path(path: str | Path) -> Path:
+    candidate = Path(path).expanduser()
+    if not candidate.is_absolute():
+        candidate = REPO_ROOT / candidate
+    return candidate.resolve()
 
 
 def _to_repo_relative_or_absolute(path: Path) -> str:

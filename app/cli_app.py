@@ -4,13 +4,22 @@ from rich.panel import Panel
 from rich.table import Table
 
 from .dataset_registry import (
-    append_dataset_row,
+    DATASET_DIR,
+    DEFAULT_DATASETS,
+    append_dataset_row_to_path,
     assign_dataset,
     dataset_summary,
     duplicate_active_dataset,
+    duplicate_dataset_file,
     get_active_dataset_paths,
     list_local_dataset_candidates,
+    load_app_options,
     load_dataset_config,
+    load_selected_methods,
+    remove_dataset_file,
+    save_app_options,
+    save_dataset_config,
+    save_selected_methods,
 )
 from .interactive import MenuOption, TerminalUI
 from .model_workbench import METHOD_SPECS, ModelWorkbench
@@ -19,8 +28,15 @@ from .model_workbench import METHOD_SPECS, ModelWorkbench
 class SexismDetectionCLI:
     def __init__(self):
         self.ui = TerminalUI()
-        self.workbench = ModelWorkbench()
-        self.selected_methods: list[str] = []
+        self.options = load_app_options()
+        self.workbench = ModelWorkbench(debug=self.options.get("debug", False))
+        valid_method_keys = {spec.key for spec in METHOD_SPECS}
+        self.selected_methods = [
+            method_key
+            for method_key in load_selected_methods()
+            if method_key in valid_method_keys
+        ]
+        self._session_duplicated_datasets: set[Path] = set()
 
     def run(self) -> None:
         while True:
@@ -56,6 +72,11 @@ class SexismDetectionCLI:
                         description="Classify a custom input with the selected methods.",
                     ),
                     MenuOption(
+                        key="options",
+                        label="Options",
+                        description="CLI behavior and cleanup settings.",
+                    ),
+                    MenuOption(
                         key="quit",
                         label="Quit",
                         description="Exit the CLI.",
@@ -71,7 +92,10 @@ class SexismDetectionCLI:
                 self._manage_datasets()
             elif action == "predict":
                 self._predict_text()
+            elif action == "options":
+                self._manage_options()
             elif action == "quit":
+                self._cleanup_session_duplicates()
                 self.ui.console.clear()
                 return
 
@@ -89,7 +113,9 @@ class SexismDetectionCLI:
             subtitle="Use Space to toggle one or more methods.",
             options=options,
             selected_keys=self.selected_methods,
+            allow_cancel=True,
         )
+        save_selected_methods(self.selected_methods)
 
     def _evaluate_methods(self) -> None:
         if not self._ensure_methods_selected():
@@ -149,7 +175,7 @@ class SexismDetectionCLI:
                     MenuOption(
                         key="append",
                         label="Append labeled row",
-                        description="Add a custom text example to a split.",
+                        description="Create a working copy, append a row, and switch the split to it.",
                     ),
                     MenuOption(
                         key="back",
@@ -200,6 +226,9 @@ class SexismDetectionCLI:
 
     def _assign_dataset(self) -> None:
         split = self._choose_split("Choose split to update")
+        if split is None:
+            return
+
         candidates = list_local_dataset_candidates()
         options = [
             MenuOption(
@@ -230,7 +259,10 @@ class SexismDetectionCLI:
             dataset_path = self.ui.ask_text(
                 title="Manual dataset path",
                 prompt_text="CSV path",
+                allow_cancel=True,
             )
+            if dataset_path is None:
+                return
         else:
             dataset_path = selected
 
@@ -248,13 +280,20 @@ class SexismDetectionCLI:
 
     def _duplicate_dataset(self) -> None:
         split = self._choose_split("Choose split to duplicate")
+        if split is None:
+            return
+
         file_name = self.ui.ask_text(
             title="Duplicate dataset",
             prompt_text="New file name",
+            allow_cancel=True,
         )
+        if file_name is None:
+            return
 
         try:
             created_path = duplicate_active_dataset(split, file_name)
+            self._track_session_duplicate(created_path)
         except Exception as exc:
             self.ui.show_message("Duplicate error", str(exc), style="red")
             return
@@ -267,27 +306,42 @@ class SexismDetectionCLI:
 
     def _append_dataset_row(self) -> None:
         split = self._choose_split("Choose target split")
+        if split is None:
+            return
+
         text = self.ui.ask_text(
             title="Append labeled row",
             prompt_text="Input text",
+            allow_cancel=True,
         )
+        if text is None:
+            return
+
         label = self.ui.select_one(
             title="Choose label",
             options=[
                 MenuOption("not sexist", "not sexist", "Negative class"),
                 MenuOption("sexist", "sexist", "Positive class"),
             ],
+            allow_cancel=True,
         )
+        if label is None:
+            return
 
         try:
-            dataset_path = append_dataset_row(split, text, label)
+            source_path = get_active_dataset_paths()[split]
+            duplicate_name = self._build_append_dataset_name(split, source_path)
+            duplicated_path = duplicate_dataset_file(source_path, duplicate_name)
+            self._track_session_duplicate(duplicated_path)
+            dataset_path = append_dataset_row_to_path(duplicated_path, text, label, split=split)
+            assign_dataset(split, dataset_path)
         except Exception as exc:
             self.ui.show_message("Append error", str(exc), style="red")
             return
 
         self.ui.show_message(
             "Row appended",
-            f"New row added to:\n{dataset_path}",
+            f"New row added to a working copy and {split} now points to:\n{dataset_path}",
             style="green",
         )
 
@@ -298,7 +352,11 @@ class SexismDetectionCLI:
         user_text = self.ui.ask_text(
             title="Predict text",
             prompt_text="Text to classify",
+            allow_cancel=True,
         )
+        if user_text is None:
+            return
+
         dataset_paths = get_active_dataset_paths()
 
         self.ui.console.clear()
@@ -324,6 +382,30 @@ class SexismDetectionCLI:
         self.ui.console.print(table)
         self.ui.pause()
 
+    def _manage_options(self) -> None:
+        selected = self.ui.select_many(
+            title="Options",
+            subtitle="Toggle persistent CLI settings.",
+            options=[
+                MenuOption(
+                    key="delete_duplicated_datasets_on_exit",
+                    label="Delete duplicated datasets on exit",
+                    description="Enabled by default for copies created during this CLI session.",
+                ),
+                MenuOption(
+                    key="debug",
+                    label="Debug",
+                    description="Enable verbose logs for preprocessing and BERTweet loading/prediction.",
+                ),
+            ],
+            selected_keys=[key for key, value in self.options.items() if value],
+            allow_cancel=True,
+        )
+        self.options["delete_duplicated_datasets_on_exit"] = "delete_duplicated_datasets_on_exit" in selected
+        self.options["debug"] = "debug" in selected
+        save_app_options(self.options)
+        self.workbench.set_debug(self.options["debug"])
+
     def _ensure_methods_selected(self) -> bool:
         if self.selected_methods:
             return True
@@ -336,7 +418,7 @@ class SexismDetectionCLI:
         self._choose_methods()
         return bool(self.selected_methods)
 
-    def _choose_split(self, title: str) -> str:
+    def _choose_split(self, title: str) -> str | None:
         return self.ui.select_one(
             title=title,
             options=[
@@ -344,6 +426,7 @@ class SexismDetectionCLI:
                 MenuOption("test", "test", "Used for evaluation."),
                 MenuOption("dev", "dev", "Optional validation split."),
             ],
+            allow_cancel=True,
         )
 
     def _format_confusion(self, confusion: list[list[int]]) -> str:
@@ -352,6 +435,43 @@ class SexismDetectionCLI:
         tn, fp = confusion[0]
         fn, tp = confusion[1]
         return f"TN={tn} FP={fp} FN={fn} TP={tp}"
+
+    def _track_session_duplicate(self, path: Path) -> None:
+        self._session_duplicated_datasets.add(path.resolve())
+
+    def _cleanup_session_duplicates(self) -> None:
+        if not self.options.get("delete_duplicated_datasets_on_exit", True):
+            return
+
+        config = load_dataset_config()
+        active_paths = get_active_dataset_paths(config)
+        config_changed = False
+
+        for split, path in active_paths.items():
+            if path.resolve() in self._session_duplicated_datasets:
+                config[split] = DEFAULT_DATASETS[split]
+                config_changed = True
+
+        if config_changed:
+            save_dataset_config(config)
+
+        for duplicated_path in list(self._session_duplicated_datasets):
+            try:
+                remove_dataset_file(duplicated_path)
+            except FileNotFoundError:
+                pass
+            except OSError:
+                continue
+
+    def _build_append_dataset_name(self, split: str, source_path: Path) -> str:
+        stem = source_path.stem
+        suffix = source_path.suffix or ".csv"
+        index = 1
+        while True:
+            candidate = f"{stem}_{split}_working_copy_{index}{suffix}"
+            if not (DATASET_DIR / candidate).exists():
+                return candidate
+            index += 1
 
 
 def run_cli() -> None:
