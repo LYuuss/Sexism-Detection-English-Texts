@@ -11,6 +11,9 @@ def map_data(data):
         "not sexist": 0,
         "sexist": 1
     })
+    
+def missing_values_handling(data):
+    return data["text"].fillna("").tolist()
 
 def _get_stop_words(language):
     if language == "custom":
