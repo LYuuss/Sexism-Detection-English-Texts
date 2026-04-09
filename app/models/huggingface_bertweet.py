@@ -110,7 +110,7 @@ def predict_texts(texts, tokenizer=None, model=None, device=None, batch_size=16,
 
         predictions.extend(batch_preds)
         
-        if (i // batch_size) % 50 == 0:
+        if debug and (i // batch_size) % 50 == 0:
             print(f"Processed {min(i + batch_size, len(texts))}/{len(texts)} texts")
 
     return predictions
