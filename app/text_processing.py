@@ -1,6 +1,5 @@
 import pandas as pd
 
-import nltk
 from nltk.stem import PorterStemmer
 
 import string
@@ -13,28 +12,34 @@ def map_data(data):
         "sexist": 1
     })
 
+def _get_stop_words(language):
+    if language == "custom":
+        return set(get_custom_stopwords())
+
+    download_nltk_stopwords()
+    return set_stopwords(language)
+
+
 # Processing the inputs
-def preprocess_texts(texts, language="english"):
+def preprocess_texts(texts, language="english", stemming=True):
     """
     Preprocess list of texts:
     - lowercase
     - remove punctuation
     - remove stopwords
-    - apply stemming
+    - optionally apply stemming
     - return cleaned texts as a list of strings
     """
-    if language != "custom":
-        download_nltk_stopwords()
-        stop_words = set_stopwords(language)
-    else:
-        stop_words = get_custom_stopwords()
+    if not isinstance(stemming, bool):
+        raise TypeError("stemming must be a boolean.")
+
+    stop_words = _get_stop_words(language)
 
     punctuation = set(string.punctuation)
-    stemmer = PorterStemmer()
+    stemmer = PorterStemmer() if stemming else None
 
     processed_texts = []
 
-    print("")
     for text in texts:
         if pd.isna(text):
             processed_texts.append("")
@@ -46,10 +51,8 @@ def preprocess_texts(texts, language="english"):
 
         tokens = [word for word in tokens if word not in stop_words]
 
-        if language != "custom":
+        if stemming:
             tokens = [stemmer.stem(word) for word in tokens]
-        else:
-            tokens = [word for word in tokens if word not in get_custom_stopwords()]
 
         processed_texts.append(" ".join(tokens))
 
