@@ -55,9 +55,34 @@ def example_evaluate_bertweet():
     return loaded_model, y_pred
 
 
+def example_bigram_tsne(output_path=None, show=False):
+    from app.visualization.tsne import create_bigram_tsne_plot
+
+    return create_bigram_tsne_plot(
+        dataset_name="test",
+        output_path=output_path,
+        show=show
+    )
+
+
+def example_bertweet_tsne(output_path=None, show=False, debug=False):
+    from app.visualization.tsne import create_bertweet_tsne_plot
+
+    return create_bertweet_tsne_plot(
+        dataset_name="test",
+        output_path=output_path,
+        show=show,
+        debug=debug
+    )
+
+
 if __name__ == "__main__":
     print("Naive Bayes evaluation example:")
     example_evaluate_naive_bayes()
 
     print("\nBERTweet evaluation example:")
     example_evaluate_bertweet()
+    
+    example_bertweet_tsne(output_path="bertweet_tsne_plot.png", show=True, debug=True)
+    
+    example_bigram_tsne(output_path="bigram_tsne_plot.png", show=True)
