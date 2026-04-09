@@ -1,10 +1,12 @@
 import nltk
 from nltk.corpus import stopwords
 
-def download_nltk_stopwords():
+
+def download_nltk_stopwords(debug=False):
     try:
         nltk.data.find("corpora/stopwords")
-        print("NLTK stopwords already downloaded.")
+        if debug:
+            print("NLTK stopwords already downloaded.")
     except LookupError:
         nltk.download("stopwords", quiet=True)
     

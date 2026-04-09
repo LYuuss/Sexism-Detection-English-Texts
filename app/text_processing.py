@@ -15,16 +15,16 @@ def map_data(data):
 def missing_values_handling(data):
     return data["text"].fillna("").tolist()
 
-def _get_stop_words(language):
+def _get_stop_words(language, debug=False):
     if language == "custom":
         return set(get_custom_stopwords())
 
-    download_nltk_stopwords()
+    download_nltk_stopwords(debug=debug)
     return set_stopwords(language)
 
 
 # Processing the inputs
-def preprocess_texts(texts, language="english", stemming=True):
+def preprocess_texts(texts, language="english", stemming=True, debug=False):
     """
     Preprocess list of texts:
     - lowercase
@@ -36,7 +36,7 @@ def preprocess_texts(texts, language="english", stemming=True):
     if not isinstance(stemming, bool):
         raise TypeError("stemming must be a boolean.")
 
-    stop_words = _get_stop_words(language)
+    stop_words = _get_stop_words(language, debug=debug)
 
     punctuation = set(string.punctuation)
     stemmer = PorterStemmer() if stemming else None

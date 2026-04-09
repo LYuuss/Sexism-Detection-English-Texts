@@ -45,7 +45,7 @@ class TerminalUI:
             self.console.print(self._build_single_select_table(options, cursor))
             self.console.print(
                 "[dim]Up/Down: move | Enter: confirm"
-                + (" | q: back[/dim]" if allow_cancel else "[/dim]")
+                + (" | Del/Backspace/Esc/q: back[/dim]" if allow_cancel else "[/dim]")
             )
 
             key = self._read_key()
@@ -55,7 +55,7 @@ class TerminalUI:
                 cursor = (cursor + 1) % len(options)
             elif key == "enter":
                 return options[cursor].key
-            elif key == "quit" and allow_cancel:
+            elif key == "cancel" and allow_cancel:
                 return None
 
     def select_many(
@@ -64,13 +64,19 @@ class TerminalUI:
         options: Sequence[MenuOption],
         selected_keys: Iterable[str] | None = None,
         subtitle: str = "",
+        allow_cancel: bool = False,
     ) -> list[str]:
         if not options:
             raise ValueError("select_many requires at least one option.")
 
         initial_keys = set(selected_keys or [])
         if not self._interactive:
-            return self._fallback_select_many(title, options, initial_keys)
+            return self._fallback_select_many(
+                title,
+                options,
+                initial_keys,
+                allow_cancel=allow_cancel,
+            )
 
         cursor = 0
         selected = {index for index, option in enumerate(options) if option.key in initial_keys}
@@ -80,7 +86,8 @@ class TerminalUI:
             self.console.print(self._build_panel(title, subtitle))
             self.console.print(self._build_multi_select_table(options, cursor, selected))
             self.console.print(
-                "[dim]Up/Down: move | Space: toggle | Enter: confirm | a: all | n: none[/dim]"
+                "[dim]Up/Down: move | Space: toggle | Enter: confirm | a: all | n: none"
+                + (" | Del/Backspace/Esc/q: back[/dim]" if allow_cancel else "[/dim]")
             )
 
             key = self._read_key()
@@ -99,6 +106,8 @@ class TerminalUI:
                 selected.clear()
             elif key == "enter":
                 return [options[index].key for index in sorted(selected)]
+            elif key == "cancel" and allow_cancel:
+                return [option.key for option in options if option.key in initial_keys]
 
     def ask_text(
         self,
@@ -106,11 +115,17 @@ class TerminalUI:
         prompt_text: str,
         default: str | None = None,
         allow_empty: bool = False,
-    ) -> str:
+        allow_cancel: bool = False,
+    ) -> str | None:
         while True:
             self._reset_screen()
-            self.console.print(self._build_panel(title))
+            subtitle = "Enter a value"
+            if allow_cancel:
+                subtitle += " | leave empty to go back"
+            self.console.print(self._build_panel(title, subtitle))
             answer = Prompt.ask(prompt_text, default=default or "")
+            if allow_cancel and not answer:
+                return None
             if answer or allow_empty:
                 return answer
 
@@ -193,6 +208,7 @@ class TerminalUI:
         title: str,
         options: Sequence[MenuOption],
         initial_keys: set[str],
+        allow_cancel: bool = False,
     ) -> list[str]:
         self.console.print(Panel(title, border_style="cyan"))
         for index, option in enumerate(options, start=1):
@@ -200,7 +216,8 @@ class TerminalUI:
             self.console.print(f"{index}. [{marker}] {option.label} - {option.description}")
 
         answer = Prompt.ask(
-            "Enter comma-separated numbers (empty keeps current selection)",
+            "Enter comma-separated numbers"
+            + (" (empty goes back)" if allow_cancel else " (empty keeps current selection)"),
             default="",
         ).strip()
         if not answer:
@@ -228,19 +245,24 @@ class TerminalUI:
                 next_char = sys.stdin.read(1)
                 if next_char == "[":
                     final_char = sys.stdin.read(1)
+                    if final_char == "3":
+                        sys.stdin.read(1)
+                        return "cancel"
                     return {
                         "A": "up",
                         "B": "down",
                         "C": "right",
                         "D": "left",
-                    }.get(final_char, "escape")
-                return "escape"
+                    }.get(final_char, "cancel")
+                return "cancel"
             if char in ("\r", "\n"):
                 return "enter"
             if char == " ":
                 return "space"
+            if char in ("\x7f", "\x08"):
+                return "cancel"
             if char.lower() == "q":
-                return "quit"
+                return "cancel"
             return char.lower()
         finally:
             termios.tcsetattr(fd, termios.TCSADRAIN, old_settings)

@@ -87,9 +87,16 @@ METHODS_BY_KEY = {method.key: method for method in METHOD_SPECS}
 
 
 class ModelWorkbench:
-    def __init__(self):
+    def __init__(self, debug=False):
+        self.debug = debug
         self._trained_models: dict[tuple[str, str], object] = {}
         self._bertweet_bundle: tuple[object, object, object] | None = None
+
+    def set_debug(self, debug: bool) -> None:
+        debug = bool(debug)
+        if self.debug != debug:
+            self.debug = debug
+            self._bertweet_bundle = None
 
     def evaluate_methods(
         self,
@@ -122,7 +129,7 @@ class ModelWorkbench:
             spec = METHODS_BY_KEY[method_key]
             if spec.kind == "naive_bayes":
                 model = self._get_or_train_naive_bayes(spec, dataset_paths["train"])
-                processed_text = preprocess_texts([text])
+                processed_text = preprocess_texts([text], debug=self.debug)
                 prediction = int(model.predict(processed_text)[0])
             elif spec.kind == "bertweet":
                 tokenizer, bertweet_model, device = self._get_bertweet_bundle()
@@ -132,7 +139,7 @@ class ModelWorkbench:
                         tokenizer=tokenizer,
                         model=bertweet_model,
                         device=device,
-                        debug=False,
+                        debug=self.debug,
                     )[0]
                 )
             else:
@@ -156,8 +163,8 @@ class ModelWorkbench:
         train_frame = self._read_dataset(dataset_paths["train"])
         test_frame = self._read_dataset(dataset_paths["test"])
 
-        X_train = preprocess_texts(train_frame["text"])
-        X_test = preprocess_texts(test_frame["text"])
+        X_train = preprocess_texts(train_frame["text"], debug=self.debug)
+        X_test = preprocess_texts(test_frame["text"], debug=self.debug)
         y_train = map_data(train_frame)
         y_test = map_data(test_frame)
 
@@ -181,7 +188,7 @@ class ModelWorkbench:
             tokenizer=tokenizer,
             model=bertweet_model,
             device=device,
-            debug=False,
+            debug=self.debug,
         )
 
         return self._build_report(spec, y_test, y_pred)
@@ -199,7 +206,7 @@ class ModelWorkbench:
 
         if X_train is None or y_train is None:
             train_frame = self._read_dataset(train_path)
-            X_train = preprocess_texts(train_frame["text"])
+            X_train = preprocess_texts(train_frame["text"], debug=self.debug)
             y_train = map_data(train_frame)
 
         model = build_pipeline(
@@ -213,7 +220,7 @@ class ModelWorkbench:
 
     def _get_bertweet_bundle(self) -> tuple[object, object, object]:
         if self._bertweet_bundle is None:
-            self._bertweet_bundle = load_model(debug=False)
+            self._bertweet_bundle = load_model(debug=self.debug)
         return self._bertweet_bundle
 
     def _read_dataset(self, path: Path) -> pd.DataFrame:
