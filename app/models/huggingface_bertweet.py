@@ -109,5 +109,8 @@ def predict_texts(texts, tokenizer=None, model=None, device=None, batch_size=16,
             batch_preds = torch.argmax(logits, dim=1).cpu().tolist()
 
         predictions.extend(batch_preds)
+        
+        if (i // batch_size) % 50 == 0:
+            print(f"Processed {min(i + batch_size, len(texts))}/{len(texts)} texts")
 
     return predictions
