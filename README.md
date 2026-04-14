@@ -1,5 +1,26 @@
 # Sexism Detection in English Texts with Naïve Bayes and Linguistic Feature Analysis
 
+## CLI Application
+
+The project includes an interactive **command-line interface** to explore and use the sexism detection pipeline from the terminal.
+
+With the CLI, you can:
+
+- choose one or more classification methods
+- evaluate selected models on the active train/test/dev CSV datasets
+- manage datasets by switching files, duplicating them, or appending labeled examples
+- enter a custom English text and get a **sexist / non-sexist** prediction
+- adjust CLI options such as debug mode and cleanup behavior
+
+(misses tsne implementation for now)
+
+### Usage
+In your python environment :
+```python3 main.py```
+
+
+# Sexism Detection in English Texts
+
 This project aims to build a **text classification system** that predicts whether an English text is **sexist** or **non-sexist**.
 
 Unlike very common classification projects such as Reuters topic classification or wine/iris prediction, this project focuses on a more socially relevant and linguistically rich task: **detecting sexist language in online texts**.
